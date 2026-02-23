@@ -387,6 +387,27 @@ local vim = {
       return {}
     end,
 
+    nvim_win_get_var = function(winid, name)
+      if not vim._windows[winid] then
+        error("Invalid window id: " .. tostring(winid))
+      end
+      local vars = vim._windows[winid].win_vars or {}
+      if vars[name] == nil then
+        error("Key not found: " .. name)
+      end
+      return vars[name]
+    end,
+
+    nvim_win_set_var = function(winid, name, value)
+      if not vim._windows[winid] then
+        error("Invalid window id: " .. tostring(winid))
+      end
+      if not vim._windows[winid].win_vars then
+        vim._windows[winid].win_vars = {}
+      end
+      vim._windows[winid].win_vars[name] = value
+    end,
+
     nvim_win_set_width = function(winid, width)
       if vim._windows[winid] then
         vim._windows[winid].width = width
@@ -983,12 +1004,48 @@ vim._mock = {
 
   split_lines = split_lines,
 
-  add_window = function(winid, bufnr, cursor)
+  add_window = function(winid, bufnr, opts)
+    opts = opts or {}
+    local buf_options = opts.buf_options or {}
+    local win_config = opts.win_config or {}
+    local win_vars = opts.win_vars or {}
+
+    -- Auto-create buffer if it doesn't already exist
+    if not vim._buffers[bufnr] then
+      vim._buffers[bufnr] = {
+        name = opts.name or "",
+        lines = {},
+        options = {
+          buftype = buf_options.buftype or "",
+          filetype = buf_options.filetype or "",
+        },
+      }
+    else
+      -- Update existing buffer with provided options
+      if opts.name then
+        vim._buffers[bufnr].name = opts.name
+      end
+      for k, v in pairs(buf_options) do
+        vim._buffers[bufnr].options[k] = v
+      end
+    end
+
     vim._windows[winid] = {
       buf = bufnr,
-      cursor = cursor or { 1, 0 },
-      width = 80,
+      cursor = opts.cursor or { 1, 0 },
+      width = opts.width or 80,
+      config = win_config,
+      win_vars = win_vars,
     }
+
+    -- Register in tabpage mappings
+    local tab = vim._current_tabpage or 1
+    vim._tabs[tab] = true
+    vim._win_tab[winid] = tab
+    if not vim._tab_windows[tab] then
+      vim._tab_windows[tab] = {}
+    end
+    table.insert(vim._tab_windows[tab], winid)
   end,
 
   reset = function()
@@ -1001,6 +1058,9 @@ vim._mock = {
     vim._autocmds = {}
     vim._vars = {}
     vim._options = {}
+    vim._tabs = { [1] = true }
+    vim._current_tabpage = 1
+    vim._current_window = 1000
     vim._last_command = nil
     vim._last_echo = nil
     vim._last_error = nil
@@ -1011,10 +1071,7 @@ if _G.vim == nil then
   _G.vim = vim
 end
 vim._mock.add_buffer(1, "/home/user/project/test.lua", "local test = {}\nreturn test")
-vim._mock.add_window(1000, 1, { 1, 0 })
-vim._win_tab[1000] = 1
-vim._tab_windows[1] = { 1000 }
-vim._current_window = 1000
+vim._mock.add_window(1000, 1, { name = "/home/user/project/test.lua" })
 
 -- Global options table (minimal)
 vim.o = setmetatable({ columns = 120, lines = 40 }, {

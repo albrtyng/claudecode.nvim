@@ -42,7 +42,7 @@ end
 ---Find a suitable main editor window to open diffs in.
 ---Excludes terminals, sidebars, and floating windows.
 ---@return number? win_id Window ID of the main editor window, or nil if not found
-local function find_main_editor_window()
+function M._find_main_editor_window()
   local windows = vim.api.nvim_list_wins()
 
   for _, win in ipairs(windows) do
@@ -56,6 +56,17 @@ local function find_main_editor_window()
     -- Skip floating windows
     if win_config.relative and win_config.relative ~= "" then
       is_suitable = false
+    end
+
+    -- Skip Snacks-managed windows (picker preview, explorer, layout panes).
+    -- Snacks.nvim sets the `snacks_win` window variable on every window it
+    -- manages, so we can reliably detect them even when the buffer has a
+    -- normal filetype (e.g. a picker preview showing a Lua file).
+    if is_suitable then
+      local has_snacks_var, _ = pcall(vim.api.nvim_win_get_var, win, "snacks_win")
+      if has_snacks_var then
+        is_suitable = false
+      end
     end
 
     if is_suitable and (buftype == "terminal" or buftype == "prompt") then
@@ -657,7 +668,7 @@ function M._open_native_diff(old_file_path, new_file_path, new_file_contents, ta
     return { provider = "native", tab_name = tab_name, success = false, error = err, temp_file = nil }
   end
 
-  local target_win = find_main_editor_window()
+  local target_win = M._find_main_editor_window()
 
   if target_win then
     vim.api.nvim_set_current_win(target_win)
@@ -1173,7 +1184,7 @@ function M._setup_blocking_diff(params, resolution_callback)
       end
 
       if not target_window then
-        target_window = find_main_editor_window()
+        target_window = M._find_main_editor_window()
       end
     end
     -- If created_new_tab is true, target_window stays nil and will be created in the new tab

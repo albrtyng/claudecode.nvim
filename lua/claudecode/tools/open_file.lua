@@ -67,6 +67,16 @@ local function find_main_editor_window()
       is_suitable = false
     end
 
+    -- Skip Snacks-managed windows (picker preview, explorer, layout panes).
+    -- Snacks.nvim sets the `snacks_win` window variable on every window it
+    -- manages.
+    if is_suitable then
+      local has_snacks_var, _ = pcall(vim.api.nvim_win_get_var, win, "snacks_win")
+      if has_snacks_var then
+        is_suitable = false
+      end
+    end
+
     -- Skip special buffer types
     if is_suitable and (buftype == "terminal" or buftype == "nofile" or buftype == "prompt") then
       is_suitable = false
@@ -84,6 +94,7 @@ local function find_main_editor_window()
         or filetype == "netrw"
         or filetype == "aerial"
         or filetype == "tagbar"
+        or filetype == "snacks_picker_list"
       )
     then
       is_suitable = false
@@ -275,4 +286,5 @@ return {
   name = "openFile",
   schema = schema,
   handler = handler,
+  _find_main_editor_window = find_main_editor_window,
 }
